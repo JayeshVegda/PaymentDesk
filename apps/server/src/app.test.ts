@@ -70,8 +70,7 @@ describe('server app', () => {
     expect(response.status).toBe(404);
   });
 
-  it('returns a typed API 404', async () => {
-    const response = await fixture().request('/api/missing', {
+  it('returns a typed API 404', async () => {    const response = await fixture().request('/api/missing', {
       headers: { host: '127.0.0.1:4782' }
     });
     expect(response.status).toBe(404);
@@ -216,5 +215,40 @@ describe('server app', () => {
     });
     expect(restored.status).toBe(200);
     await expect(restored.json()).resolves.toMatchObject({ status: 'posted' });
+  });
+
+  it('exposes and updates notification settings through the API', async () => {
+    const app = fixture();
+    const headers = { host: '127.0.0.1:4782', 'content-type': 'application/json' };
+
+    const initial = await (await app.request('/api/settings', { headers })).json() as {
+      forwardEnabled: boolean;
+      summariesEnabled: boolean;
+    };
+    expect(initial).toEqual({ forwardEnabled: true, summariesEnabled: true });
+
+    const paused = await app.request('/api/settings', {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ forwardEnabled: false })
+    });
+    expect(paused.status).toBe(200);
+    await expect(paused.json()).resolves.toEqual({ forwardEnabled: false, summariesEnabled: true });
+
+    const status = await (await app.request('/api/system/status', { headers })).json() as {
+      telegram: { forwardEnabled: boolean };
+    };
+    expect(status.telegram.forwardEnabled).toBe(false);
+
+    const invalid = await app.request('/api/settings', {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ forwardEnabled: 'yes' })
+    });
+    expect(invalid.status).toBe(400);
+
+    const resumed = await app.request('/api/settings', {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ forwardEnabled: true, summariesEnabled: false })
+    });
+    await expect(resumed.json()).resolves.toEqual({ forwardEnabled: true, summariesEnabled: false });
   });
 });

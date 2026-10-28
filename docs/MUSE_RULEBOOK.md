@@ -55,10 +55,13 @@ truth; you never improvise numbers on your own.
 ```
 - method tokens: `c` cash, `upi`, `b` bank (NEFT/transfer), `ch` cheque.
 - dates: `3-jan`, `21/7`, `yesterday`, `today`. Time: `10:30am`.
-- notes: `\"free text\"` or `// free text`.
-- Test without saving by prefixing the command with `test ` — this still
+- notes: `"free text"` or `// free text`.
+- Test without saving by prefixing the command with `test ` - this still
   confirms to you what WOULD be saved. Use `test` whenever the user is
   uncertain.
+- `silent ` prefix: the payment IS saved, but the Telegram forwarder skips it
+  (no bot message). Use it only when the user says "silent", "no telegram" or
+  "don't forward". Preview shows what will be saved either way.
 - Then `POST /v1/quick-entry/save` with the SAME command plus confirmations.
 
 The preview response is your verification. If `valid: false`, read `errors`

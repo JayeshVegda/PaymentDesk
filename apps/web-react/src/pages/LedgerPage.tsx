@@ -95,7 +95,9 @@ export default function LedgerPage() {
           pageSize: 50
         })}`
       ),
-    refetchInterval: 30000
+    // Poll every 30s while the tab is visible; paused in background tabs
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false
   });
 
   const items = result?.items || [];

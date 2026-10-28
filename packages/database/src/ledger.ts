@@ -1157,6 +1157,42 @@ export class LedgerService {
     };
   }
 
+  getNotificationSettings() {
+    const read = (key: string): boolean => {
+      try {
+        const row = this.sqlite.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as
+          | { value: string }
+          | undefined;
+        if (!row) return true;
+        return (JSON.parse(row.value) as unknown) !== false;
+      } catch {
+        return true;
+      }
+    };
+    return {
+      forwardEnabled: read('telegram.forward.enabled'),
+      summariesEnabled: read('telegram.summaries.enabled')
+    };
+  }
+
+  updateNotificationSettings(input: {
+    forwardEnabled?: boolean;
+    summariesEnabled?: boolean;
+  }) {
+    const write = (key: string, value: boolean | undefined): void => {
+      if (typeof value !== 'boolean') throw new TypeError(`Setting ${key} must be true or false`);
+      this.sqlite
+        .prepare(
+          `INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
+        )
+        .run(key, JSON.stringify(value));
+    };
+    if ('forwardEnabled' in input) write('telegram.forward.enabled', input.forwardEnabled);
+    if ('summariesEnabled' in input) write('telegram.summaries.enabled', input.summariesEnabled);
+    return this.getNotificationSettings();
+  }
+
   getTransaction(transactionId: number) {
     const row = this.sqlite
       .prepare(

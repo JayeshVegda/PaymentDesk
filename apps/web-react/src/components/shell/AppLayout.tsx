@@ -46,7 +46,7 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Keyboard shortcuts (N -> record payment modal, / -> focus input, G -> T/L/P/R/A/O/S chord navigation)
+  // Keyboard shortcuts (N -> record payment modal, / -> focus input, G -> T/L/P/R/A/O/S/E chord navigation)
   useEffect(() => {
     let gPressed = false;
     let gTimeout: number | undefined;
@@ -126,7 +126,8 @@ export default function AppLayout() {
             p: '/payees',
             a: '/activity',
             o: '/reports',
-            s: '/system'
+            s: '/system',
+            e: '/settings'
           };
           if (chordMap[key]) {
             e.preventDefault();
@@ -166,7 +167,8 @@ export default function AppLayout() {
   const moreNavItems = [
     { label: 'Activity', path: '/activity', key: '5' },
     { label: 'Export', path: '/export', key: '8' },
-    { label: 'System', path: '/system', key: '6' }
+    { label: 'System', path: '/system', key: '6' },
+    { label: 'Settings', path: '/settings', key: '9' }
   ];
 
   const allMobileNavItems = [
@@ -179,7 +181,8 @@ export default function AppLayout() {
     { label: 'Reports', path: '/reports' },
     { label: 'Activity', path: '/activity' },
     { label: 'Export', path: '/export' },
-    { label: 'System', path: '/system' }
+    { label: 'System', path: '/system' },
+    { label: 'Settings', path: '/settings' }
   ];
 
   return (

@@ -102,6 +102,8 @@ export function startTelegramCompanion(runtime: DatabaseRuntime): TelegramCompan
   const deliveredTransactionIds = new Set<number>();
   let stopped = false;
   let forwarding = false;
+  let forwardPauseLogged = false;
+  let summaryPauseLogged = false;
 
   const authorised = (ctx: Context): boolean =>
     Boolean(
@@ -437,6 +439,18 @@ export function startTelegramCompanion(runtime: DatabaseRuntime): TelegramCompan
     if (forwarding || stopped) return;
     forwarding = true;
     try {
+      if (getSetting(runtime, 'telegram.forward.enabled') === 'false') {
+        if (!forwardPauseLogged) {
+          forwardPauseLogged = true;
+          process.stdout.write(`${JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: 'telegram_forward_paused'
+          })}\n`);
+        }
+        return;
+      }
+      forwardPauseLogged = false;
       const key = 'telegram.last_forwarded_transaction_id';
       const lastId = Number(getSetting(runtime, key) ?? '0');
       const rows = runtime.sqlite
@@ -480,6 +494,18 @@ export function startTelegramCompanion(runtime: DatabaseRuntime): TelegramCompan
 
   const sendScheduledSummaries = async () => {
     if (stopped) return;
+    if (getSetting(runtime, 'telegram.summaries.enabled') === 'false') {
+      if (!summaryPauseLogged) {
+        summaryPauseLogged = true;
+        process.stdout.write(`${JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          message: 'telegram_summaries_paused'
+        })}\n`);
+      }
+      return;
+    }
+    summaryPauseLogged = false;
     const now = businessNow();
     const minute = now.time.slice(0, 5);
     const configured = (process.env.TELEGRAM_SUMMARY_TIMES ?? '18:00,20:00')

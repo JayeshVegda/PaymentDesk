@@ -120,30 +120,33 @@ export interface TransactionPage {
 }
 
 export interface SystemStatus {
-  integrity: 'ok' | 'corrupt';
+  integrity: string;
   journalMode: string;
   databaseSizeBytes: number;
   backupsSizeBytes: number;
   databasePath: string;
   backupCount: number;
-  lastBackup: { name: string; modifiedAt: string } | null;
+  lastBackup: { name: string; sizeBytes: number; modifiedAt: string } | null;
   lastActivity: string | null;
   payeeCount: number;
   counts: {
+    total: number;
     posted: number;
-    review: number;
     voided: number;
+    review: number;
   };
-}
-
-export interface AuditEntry {
-  id: number;
-  transactionId: number;
-  action: 'create' | 'correct' | 'void';
-  changedAt: string;
-  amountPaise: number;
-  note: string | null;
-  userId: number | null;
+  telegram: {
+    enabled: boolean;
+    configured: boolean;
+    status: string;
+    summaryTimes: string;
+    lastForwardedTransactionId: number;
+    lastSummary6Date: string | null;
+    lastSummary8Date: string | null;
+    panelVersion: string | null;
+    forwardEnabled: boolean;
+    summariesEnabled: boolean;
+  };
 }
 
 export class ApiError extends Error {

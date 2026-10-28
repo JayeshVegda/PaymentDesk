@@ -44,12 +44,15 @@ export function createApi(runtime: DatabaseRuntime): Hono {
         return raw;
       }
     };
+    const notifications = ledger.getNotificationSettings();
     return context.json({
       ...ledger.getSystemStatus(),
       telegram: {
         enabled,
         configured,
         status: enabled && configured ? 'active' : enabled ? 'incomplete' : 'disabled',
+        forwardEnabled: notifications.forwardEnabled,
+        summariesEnabled: notifications.summariesEnabled,
         summaryTimes: process.env.TELEGRAM_SUMMARY_TIMES || '18:00,20:00',
         lastForwardedTransactionId: Number(setting('telegram.forward.last_transaction_id') || 0),
         lastSummary6Date: setting('telegram.summary.18:00.last_date'),
@@ -58,6 +61,12 @@ export function createApi(runtime: DatabaseRuntime): Hono {
       }
     });
   });
+  api.get('/settings', (context) => context.json(ledger.getNotificationSettings()));
+  api.patch('/settings', async (context) => {
+    const body = await context.req.json<Parameters<typeof ledger.updateNotificationSettings>[0]>();
+    return context.json(ledger.updateNotificationSettings(body));
+  });
+
   api.get('/dashboard', (context) => context.json(ledger.getDashboard(context.req.query('date'))));
 
   api.get('/master-data', (context) =>

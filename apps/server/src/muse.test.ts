@@ -145,6 +145,25 @@ describe('muse api', () => {
     expect(restored.status).toBe(200);
   });
 
+  it('records silent payments through the quick-entry prefix', async () => {
+    const app = fixture(MUSE_KEY);
+    const response = await app.request('/muse/v1/quick-entry/save', {
+      method: 'POST',
+      headers: withKey({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ command: 'silent quiet trader 1.2k wages', confirmNewPayee: true, source: 'muse' })
+    });
+    expect(response.status).toBe(201);
+    const created: { transaction: { id: number } } = await response.json();
+
+    const audit = await app.request(`/muse/v1/transactions/${created.transaction.id}/audit`, {
+      headers: withKey()
+    });
+    const entries: Array<{ newData: { silent: boolean; source: string } }> = await audit.json();
+    const [createdEntry] = entries;
+    expect(createdEntry?.newData.silent).toBe(true);
+    expect(createdEntry?.newData.source).toBe('muse');
+  });
+
   it('exposes dashboard, activity and reports', async () => {
     const app = fixture(MUSE_KEY);
     const dashboard = await app.request('/muse/v1/dashboard', { headers: withKey() });
