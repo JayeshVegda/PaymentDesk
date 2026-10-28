@@ -16,4 +16,4 @@ Before handing a build to the workstation:
 - [ ] System reports database integrity `ok`
 - [ ] Telegram is either deliberately disabled or shows configured/active in System
 
-The current release has passed TypeScript checks, 34 unit/integration tests, a production build, a loopback smoke test, and 1920×1080 route inspection. ESLint still reports legacy explicit-`any` and unused-import findings in older React pages; these do not affect the build or runtime and should be addressed as a separate refactor.
+The latest baseline passed TypeScript checks, ESLint (clean), 51 unit/integration tests, a production build, and a smoke test. Update this paragraph after each release run.

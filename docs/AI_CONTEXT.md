@@ -8,7 +8,7 @@ Maintain a reliable single-user local payment ledger for an Indian business. Opt
 
 ## Technology
 
-React 19 + Vite + TypeScript + Tailwind, React Router, TanStack Query, Lucide, Sonner, and lazy LayerChart/ECharts reporting on the frontend. Hono + TypeScript on the backend. SQLite through better-sqlite3 with plain SQL migrations and repository/service boundaries.
+React 19 + Vite + TypeScript + Tailwind, React Router, TanStack Query, Lucide, Sonner, and lazy recharts reporting on the frontend. Hono + TypeScript on the backend. SQLite through better-sqlite3 with plain SQL migrations and repository/service boundaries.
 
 ## Where to change things
 

@@ -16,15 +16,7 @@ Start manually:
 .\scripts\start-production.ps1
 ```
 
-Install startup:
-
-```powershell
-.\scripts\setup-windows-task.ps1
-```
-
-The task runs for the current Windows user, starts silently 20 seconds after logon, ignores duplicate instances, has no execution time limit, and continuously supervises the server. It checks application and database health, restarts a failed process, and writes logs under `%LOCALAPPDATA%\PaymentLedger\logs`.
-
-If Task Scheduler registration is blocked for a standard Windows account, place a hidden launcher for `scripts\supervise-production.ps1` in the current user's Startup folder. The supervisor itself provides continuous retry and health recovery without administrator rights.
+Startup is owned by **NSSM** (service name `PaymentDesk`) and must not be managed with Task Scheduler, `setup-windows-task.ps1`, or `supervise-production.ps1` — those mechanisms are retired. See the root `AGENTS.md` for the current ownership rules. The service starts at boot, restarts a failed process, and writes logs under `%LOCALAPPDATA%\PaymentLedger\logs`.
 
 ## Verification
 
