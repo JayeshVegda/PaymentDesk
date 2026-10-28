@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const BUSINESS_TIME_ZONE = 'Asia/Kolkata' as const;
 
-export const sourceSchema = z.enum(['web', 'telegram', 'import', 'job', 'system']);
+export const sourceSchema = z.enum(['web', 'telegram', 'import', 'job', 'system', 'muse']);
 export type ChangeSource = z.infer<typeof sourceSchema>;
 
 export const transactionStatusSchema = z.enum(['posted', 'voided']);

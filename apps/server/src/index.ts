@@ -19,7 +19,8 @@ const app = createApp({
   ...(process.env.PAYMENT_LEDGER_EXPECTED_ORIGIN
     ? { expectedOrigin: process.env.PAYMENT_LEDGER_EXPECTED_ORIGIN }
     : {}),
-  logLevel: process.env.PAYMENT_LEDGER_LOG_LEVEL ?? (production ? 'warn' : 'info')
+  logLevel: process.env.PAYMENT_LEDGER_LOG_LEVEL ?? (production ? 'warn' : 'info'),
+  ...(process.env.MUSE_API_KEY ? { museApiKey: process.env.MUSE_API_KEY } : {})
 });
 
 const server = serve({ fetch: app.fetch, hostname, port }, (info) => {

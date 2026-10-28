@@ -45,7 +45,7 @@ describe('database foundation', () => {
     expect(runtime.sqlite.pragma('journal_mode', { simple: true })).toBe('wal');
     expect(runtime.sqlite.pragma('busy_timeout', { simple: true })).toBe(5000);
     expect(migrateDatabase(runtime.sqlite)).toEqual([]);
-    expect(runtime.sqlite.prepare('SELECT count(*) FROM schema_migrations').pluck().get()).toBe(11);
+    expect(runtime.sqlite.prepare('SELECT count(*) FROM schema_migrations').pluck().get()).toBe(12);
     await runtime.close();
   });
 

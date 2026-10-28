@@ -5,6 +5,7 @@ import { databaseHealth, type DatabaseRuntime } from '@payment-ledger/database';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { createApi } from './api.js';
+import { createMuseApi } from './muse.js';
 
 export interface AppOptions {
   runtime: DatabaseRuntime;
@@ -12,6 +13,7 @@ export interface AppOptions {
   expectedOrigin?: string;
   webBuildDirectory?: string;
   logLevel?: string;
+  museApiKey?: string;
 }
 
 interface ErrorBody {
@@ -68,6 +70,10 @@ export function createApp(options: AppOptions): Hono {
     return context.json({ status: 'ok' as const, version: '0.1.0', database });
   });
   app.route('/api', createApi(options.runtime));
+
+  if (options.museApiKey) {
+    app.route('/muse', createMuseApi(options.runtime, options.museApiKey));
+  }
 
   if (existsSync(webBuildDirectory)) {
     app.use('*', serveStatic({ root: webBuildDirectory }));
