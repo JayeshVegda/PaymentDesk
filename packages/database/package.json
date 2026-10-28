@@ -1,0 +1,27 @@
+{
+  "name": "@payment-ledger/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@payment-ledger/core": "workspace:*",
+    "@payment-ledger/parser": "workspace:*",
+    "@payment-ledger/shared": "workspace:*",
+    "better-sqlite3": "13.0.2",
+    "kysely": "0.29.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0"
+  }
+}

@@ -1,0 +1,8 @@
+This legacy setup note is kept as a pointer for older archives.
+
+For current Windows production setup, use:
+
+  .\scripts\setup-windows.ps1
+  .\scripts\start-production.ps1
+
+See README.md and docs/PRODUCTION_SETUP.md.

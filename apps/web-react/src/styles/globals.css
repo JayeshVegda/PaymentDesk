@@ -1,0 +1,335 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --color-bg-page: var(--bg-page);
+  --color-bg-card: var(--bg-card);
+  --color-bg-selected: var(--bg-selected);
+  --color-border-default: var(--border-default);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-hover: var(--brand-blue-hover);
+  --color-success-green: var(--success-green);
+  --color-danger-red: var(--danger-red);
+  --color-warning-amber: var(--warning-amber);
+
+  /* Legacy theme aliases */
+  --color-ledger-ink: var(--text-primary);
+  --color-ledger-blue: var(--brand-blue);
+  --color-ledger-blue-hover: var(--brand-blue-hover);
+  --color-ledger-selection: var(--bg-selected);
+  --color-ledger-workspace: var(--bg-page);
+  --color-ledger-surface: var(--bg-card);
+  --color-ledger-border: var(--border-default);
+  --color-ledger-muted: var(--text-secondary);
+}
+
+/* Global resets & typography */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  font-size: var(--base-font-size);
+  line-height: var(--base-line-height);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(22, 93, 255, 0.12);
+}
+
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: 12px;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: var(--radius-button);
+  background: var(--text-primary);
+  color: white;
+  padding: 8px 12px;
+  font-weight: 700;
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.skip-link:focus-visible { transform: translateY(0); }
+
+/* Tabular numerals for money and numbers */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus styling */
+:focus-visible {
+  outline: 2px solid var(--brand-blue) !important;
+  outline-offset: 1px;
+}
+
+/* Card components */
+.ledger-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+/* Keyboard desktop feel visual system */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 5px;
+  background-color: #F1F5F9;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Forms & Inputs */
+.form-input {
+  width: 100%;
+  height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-input);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
+}
+
+.form-input:focus {
+  border-color: var(--brand-blue);
+  box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.15);
+  outline: none;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background-color: var(--brand-blue);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--brand-blue-hover);
+}
+
+.btn-secondary {
+  background-color: var(--bg-card);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Segmented Control Tabs */
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  background-color: #EEF2F6;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+}
+
+.segmented-tab {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.segmented-tab:hover {
+  color: var(--text-primary);
+}
+
+.segmented-tab.active {
+  background-color: var(--bg-card);
+  color: var(--brand-blue);
+  box-shadow: var(--shadow-segmented);
+}
+
+/* Money Cell & Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  line-height: 1.2;
+}
+
+.status-pill-amber {
+  background-color: #FFF7ED;
+  color: var(--warning-amber);
+  border: 1px solid #FFEDD5;
+}
+
+.status-pill-green {
+  background-color: #F0FDF4;
+  color: var(--success-green);
+  border: 1px solid #DCFCE7;
+}
+
+.status-pill-blue {
+  background-color: #EFF6FF;
+  color: var(--brand-blue);
+  border: 1px solid #DBEAFE;
+}
+
+.status-pill-gray {
+  background-color: #F8FAFC;
+  color: var(--text-secondary);
+  border: 1px solid #E2E8F0;
+}
+
+/* Payee Initial Avatar */
+.payee-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  color: white;
+  flex-shrink: 0;
+}
+
+/* Clickable Table Rows */
+.clickable-table-row {
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+  cursor: pointer;
+}
+
+.clickable-table-row:hover {
+  background-color: var(--bg-page);
+  border-left: 4px solid var(--brand-blue);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Centralized One-Liner Table Styling */
+table {
+  border-collapse: collapse;
+}
+
+table th {
+  padding: 8px 16px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  white-space: nowrap !important;
+}
+
+table td {
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+  white-space: nowrap !important;
+}
+
+.table-nowrap {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.form-input-with-icon {
+  padding-left: 42px !important;
+}
+
+/* Notion-Style Table Styling */
+.notion-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.notion-table th {
+  background-color: transparent !important;
+  color: #475569 !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  padding: 10px 16px !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.notion-table tr {
+  border-bottom: 1px solid #F1F5F9 !important;
+  transition: background-color 150ms ease;
+}
+
+.notion-table tr:hover {
+  background-color: #F8FAFC !important;
+}
+
+.notion-table td {
+  padding: 10px 16px !important;
+  font-size: 13px !important;
+  color: #1E293B !important;
+  border: none !important;
+  white-space: nowrap !important;
+}

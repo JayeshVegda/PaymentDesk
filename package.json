@@ -1,0 +1,46 @@
+{
+  "name": "payment-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": "11.18.0"
+  },
+  "scripts": {
+    "build:packages": "tsc -b packages/shared packages/parser packages/core packages/database",
+    "build:server": "tsc -b apps/server",
+    "build:web": "pnpm --filter @payment-ledger/web-react build",
+    "build": "pnpm run build:packages && pnpm run build:server && pnpm run build:web",
+    "dev": "pnpm run build:packages && pnpm --parallel --stream --filter @payment-ledger/web-react --filter @payment-ledger/server run dev",
+    "start": "node --env-file-if-exists=.env scripts/start-production.mjs",
+    "check": "pnpm run build:packages && pnpm --filter @payment-ledger/web-react check && tsc -b apps/server --pretty false",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "db:migrate": "pnpm run build:packages && tsx scripts/migrate.ts",
+    "db:backup": "pnpm run build:packages && tsx scripts/backup.ts",
+    "db:seed-demo": "pnpm run build:packages && tsx scripts/seed-demo.ts",
+    "smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-production.ps1",
+    "setup:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-windows.ps1",
+    "verify:production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-production.ps1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.13.3",
+    "eslint": "10.8.0",
+    "eslint-plugin-svelte": "3.22.0",
+    "globals": "17.8.0",
+    "prettier": "3.9.6",
+    "prettier-plugin-svelte": "4.1.1",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "tsx": "4.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
+  }
+}

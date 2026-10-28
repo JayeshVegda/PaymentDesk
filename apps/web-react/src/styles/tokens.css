@@ -1,0 +1,48 @@
+:root {
+  /* Design Tokens from Redesign Specification */
+  --bg-page: #F6F8FC;
+  --bg-card: #FFFFFF;
+  --bg-selected: #E9F1FF;
+  --border-default: #DDE3EC;
+  --text-primary: #111827;
+  --text-secondary: #667085;
+  --brand-blue: #165DFF;
+  --brand-blue-hover: #004BE5;
+  --success-green: #00B96B;
+  --danger-red: #FF2638;
+  --warning-amber: #F79009;
+
+  /* Legacy aliases for backward compatibility */
+  --ledger-ink: var(--text-primary);
+  --ledger-blue: var(--brand-blue);
+  --ledger-blue-hover: var(--brand-blue-hover);
+  --ledger-selection: var(--bg-selected);
+  --ledger-workspace: var(--bg-page);
+  --ledger-surface: var(--bg-card);
+  --ledger-border: var(--border-default);
+  --ledger-muted: var(--text-secondary);
+  --ledger-review: var(--warning-amber);
+
+  /* Radius */
+  --radius-card: 14px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --radius-pill: 999px;
+  --radius-container: 14px;
+  --radius-base: 10px;
+  --radius-small: 8px;
+
+  /* Shadow */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 5px 14px rgba(16, 24, 40, 0.055);
+  --shadow-drawer: 0 8px 24px rgba(16, 24, 40, 0.12);
+  --shadow-segmented: 0 1px 3px rgba(16, 24, 40, 0.1);
+
+  /* Motion */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout */
+  --base-font-size: 15px;
+  --base-line-height: 1.5;
+}

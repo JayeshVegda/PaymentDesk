@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.svelte-kit
+coverage
+playwright-report
+pnpm-lock.yaml
+data
+backups
+
