@@ -248,6 +248,15 @@ export class SqliteTransactionRepository implements TransactionRepository {
       if (!needsReview && (categoryId === null || paymentMethodId === null)) {
         throw new TypeError('Missing category or payment method requires review');
       }
+      const unchanged =
+        categoryId === current.categoryId &&
+        paymentMethodId === current.paymentMethodId &&
+        needsReview === current.needsReview &&
+        (input.transactionDate ?? current.transactionDate) === current.transactionDate &&
+        (input.transactionTime ?? current.transactionTime) === current.transactionTime &&
+        (input.amountPaise ?? current.amountPaise) === current.amountPaise &&
+        (input.note === undefined ? current.note : input.note) === current.note;
+      if (unchanged) return current;
       const now = Date.now();
       const previous = Date.parse(current.updatedAt);
       const updatedAt = new Date(Number.isFinite(previous) && now <= previous ? previous + 1 : now).toISOString();

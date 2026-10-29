@@ -8,11 +8,12 @@ import {
   formatTime12,
   MasterData,
   LedgerTransaction} from '../api/client';
-import { ArrowLeft, Star, Inbox, ChevronLeft, ChevronRight, Edit } from 'lucide-react';
+import { ArrowLeft, Star, Inbox, ChevronLeft, ChevronRight, Edit, GitMerge } from 'lucide-react';
 import { toast } from 'sonner';
 import { PayeeAvatar } from '../components/common/PayeeAvatar';
 import { StatusPill } from '../components/common/StatusPill';
 import { TransactionDrawer } from '../components/common/TransactionDrawer';
+import MergePayeeModal from '../components/payees/MergePayeeModal';
 import {
   ResponsiveContainer,
   BarChart as ReBarChart,
@@ -30,6 +31,7 @@ export default function PayeeDetailPage() {
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<LedgerTransaction | null>(null);
   const [payeeModalOpen, setPayeeModalOpen] = useState(false);
+  const [mergeModalOpen, setMergeModalOpen] = useState(false);
 
   // Form Edit State
   const [payeeName, setPayeeName] = useState('');
@@ -176,10 +178,20 @@ export default function PayeeDetailPage() {
           </div>
         </div>
 
-        <button onClick={handleEditOpen} className="btn btn-secondary h-10 px-4 gap-2 text-slate-700">
-          <Edit size={16} />
-          <span>Edit Payee</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleEditOpen} className="btn btn-secondary h-10 px-4 gap-2 text-slate-700">
+            <Edit size={16} />
+            <span>Edit Payee</span>
+          </button>
+          <button
+            onClick={() => setMergeModalOpen(true)}
+            className="btn btn-secondary h-10 px-4 gap-2 text-slate-700"
+            title="Merge this payee into another one and move all payments"
+          >
+            <GitMerge size={16} />
+            <span>Merge</span>
+          </button>
+        </div>
       </div>
 
       {/* Payee Info & Notes */}
@@ -370,6 +382,19 @@ export default function PayeeDetailPage() {
         transaction={selectedTx}
         onClose={() => setSelectedTx(null)}
       />
+
+      {/* Payee Merge Modal */}
+      {mergeModalOpen && pay && master && (
+        <MergePayeeModal
+          source={pay}
+          payees={master.payees}
+          onClose={() => setMergeModalOpen(false)}
+          onMerged={(targetId) => {
+            setMergeModalOpen(false);
+            navigate(`/payees/${targetId}`);
+          }}
+        />
+      )}
 
       {/* Payee Edit Modal */}
       {payeeModalOpen && (

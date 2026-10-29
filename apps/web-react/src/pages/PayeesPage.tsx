@@ -12,12 +12,13 @@ import {
   Category,
   PaymentMethod
 } from '../api/client';
-import { Star, Plus, Edit, Search, Inbox, Trash2, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Star, Plus, Edit, Search, Inbox, Trash2, ChevronLeft, ChevronRight, RotateCcw, GitMerge } from 'lucide-react';
 import { toast } from 'sonner';
 import { PayeeAvatar } from '../components/common/PayeeAvatar';
 import { PayeeDrawer } from '../components/common/PayeeDrawer';
 import { SegmentedTabs } from '../components/common/SegmentedTabs';
 import { ConfirmModal } from '../components/common/ConfirmModal';
+import MergePayeeModal from '../components/payees/MergePayeeModal';
 
 export default function PayeesPage() {
   const queryClient = useQueryClient();
@@ -33,6 +34,7 @@ export default function PayeesPage() {
   // Payee Edit Modal state
   const [payeeModalOpen, setPayeeModalOpen] = useState(false);
   const [editingPayee, setEditingPayee] = useState<Payee | null>(null);
+  const [mergingPayee, setMergingPayee] = useState<Payee | null>(null);
   const [payeeName, setPayeeName] = useState('');
   const [payeeType, setPayeeType] = useState<'person' | 'company'>('person');
   const [aliases, setAliases] = useState('');
@@ -698,6 +700,17 @@ export default function PayeesPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              setMergingPayee(payee);
+                            }}
+                            aria-label={`Merge ${payee.name}`}
+                            className="p-1.5 text-[#667085] hover:text-[#165DFF] hover:bg-[#E9F1FF] rounded-lg transition-colors cursor-pointer"
+                            title="Merge this payee into another"
+                          >
+                            <GitMerge size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleDeletePayee(payee);
                             }}
                             aria-label={`Delete ${payee.name}`}
@@ -1067,6 +1080,15 @@ export default function PayeesPage() {
             </form>
           </div>
         </div>
+      )}
+      {/* Payee Merge Modal */}
+      {mergingPayee && (
+        <MergePayeeModal
+          source={mergingPayee}
+          payees={payees}
+          onClose={() => setMergingPayee(null)}
+          onMerged={() => setMergingPayee(null)}
+        />
       )}
       {/* Dynamic ConfirmModal */}
       <ConfirmModal

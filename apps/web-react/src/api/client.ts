@@ -160,6 +160,12 @@ export class ApiError extends Error {
   }
 }
 
+export interface MergePayeesResult {
+  movedTransactions: number;
+  source: { id: number; name: string };
+  target: { id: number; name: string };
+}
+
 export function formatTime12(value: string): string {
   const match = /^(\d{2}):(\d{2})/.exec(value);
   if (!match) return value;

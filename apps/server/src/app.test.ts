@@ -251,4 +251,98 @@ describe('server app', () => {
     });
     await expect(resumed.json()).resolves.toEqual({ forwardEnabled: true, summariesEnabled: false });
   });
+
+  it('searches transactions by amount and category name', async () => {
+    const app = fixture();
+    const headers = { host: '127.0.0.1:4782', 'content-type': 'application/json' };
+    await app.request('/api/quick-entry/save', {
+      method: 'POST', headers,
+      body: JSON.stringify({ command: 'search tester 1250.50 cash transport', confirmNewPayee: true })
+    });
+    const byAmount = await (await app.request('/api/transactions?search=1250.5', { headers })).json() as { items: unknown[] };
+    expect(byAmount.items).toHaveLength(1);
+    const byCategory = await (await app.request('/api/transactions?search=transport', { headers })).json() as { items: unknown[] };
+    expect(byCategory.items).toHaveLength(1);
+  });
+
+  it('keeps version stable when a correction is a no-op', async () => {
+    const app = fixture();
+    const headers = { host: '127.0.0.1:4782', 'content-type': 'application/json' };
+    const saved = await (await app.request('/api/quick-entry/save', {
+      method: 'POST', headers,
+      body: JSON.stringify({ command: 'stable sam 300 cash', confirmNewPayee: true })
+    })).json() as { transaction: { id: number; updatedAt: string; version: number } };
+    const master = await (await app.request('/api/master-data', { headers })).json() as {
+      categories: Array<{ id: number }>;
+      paymentMethods: Array<{ id: number; code: string }>;
+    };
+    const categoryId = master.categories[0]!.id;
+    const methodId = master.paymentMethods.find((method) => method.code === 'cash')!.id;
+
+    const first = await app.request(`/api/transactions/${saved.transaction.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ categoryId, paymentMethodId: methodId, needsReview: false, expectedUpdatedAt: saved.transaction.updatedAt })
+    });
+    const afterFirst: { updatedAt: string; version: number } = await first.json();
+    expect(afterFirst.version).toBeGreaterThan(saved.transaction.version);
+
+    const second = await app.request(`/api/transactions/${saved.transaction.id}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ categoryId, paymentMethodId: methodId, needsReview: false, expectedUpdatedAt: afterFirst.updatedAt })
+    });
+    const afterSecond: { updatedAt: string; version: number } = await second.json();
+    expect(afterSecond.updatedAt).toBe(afterFirst.updatedAt);
+    expect(afterSecond.version).toBe(afterFirst.version);
+
+    const audit = await (await app.request(`/api/transactions/${saved.transaction.id}/audit`, { headers })).json() as Array<{ action: string }>;
+    expect(audit.filter((entry) => entry.action === 'corrected')).toHaveLength(1);
+  });
+
+  it('merges duplicate payees and moves their payment history', async () => {
+    const app = fixture();
+    const headers = { host: '127.0.0.1:4782', 'content-type': 'application/json' };
+    await app.request('/api/quick-entry/save', {
+      method: 'POST', headers,
+      body: JSON.stringify({ command: 'khusbu 500 cash wages', confirmNewPayee: true })
+    });
+    await app.request('/api/quick-entry/save', {
+      method: 'POST', headers,
+      body: JSON.stringify({ command: 'khusbu metal 900 upi wages', confirmNewPayee: true })
+    });
+
+    const masterBefore = await (await app.request('/api/master-data', { headers })).json() as {
+      payees: Array<{ id: number; name: string }>;
+    };
+    const source = masterBefore.payees.find((payee) => payee.name.toLowerCase() === 'khusbu')!;
+    const target = masterBefore.payees.find((payee) => payee.id !== source.id && payee.name.toLowerCase().includes('metal'))!;
+
+    const sameGuard = await app.request('/api/payees/merge', {
+      method: 'POST', headers,
+      body: JSON.stringify({ sourceId: source.id, targetId: source.id })
+    });
+    expect(sameGuard.status).toBe(400);
+
+    const mergedResponse = await app.request('/api/payees/merge', {
+      method: 'POST', headers,
+      body: JSON.stringify({ sourceId: source.id, targetId: target.id })
+    });
+    expect(mergedResponse.status).toBe(200);
+    await expect(mergedResponse.json()).resolves.toMatchObject({
+      movedTransactions: 1,
+      source: { id: source.id, name: source.name },
+      target: { id: target.id }
+    });
+
+    const targetTransactions = await (await app.request(`/api/transactions?payeeId=${target.id}`, { headers })).json() as { items: Array<{ payeeName: string }> };
+    expect(targetTransactions.items).toHaveLength(2);
+    expect(targetTransactions.items.every((item) => item.payeeName === target.name)).toBe(true);
+
+    const masterAfter = await (await app.request('/api/master-data', { headers })).json() as {
+      payees: Array<{ id: number; name: string; active: boolean; aliases: string[] }>;
+    };
+    const mergedTarget = masterAfter.payees.find((payee) => payee.id === target.id)!;
+    expect(mergedTarget.active).toBe(true);
+    expect(mergedTarget.aliases).toContain(source.name);
+    expect(masterAfter.payees.find((payee) => payee.id === source.id)).toBeUndefined();
+  });
 });

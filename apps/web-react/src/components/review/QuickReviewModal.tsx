@@ -42,10 +42,14 @@ export default function QuickReviewModal({
         master.paymentMethods.find((method) => method.code === 'cash')?.id.toString() ||
         ''
       );
-      setRemember(Boolean(transaction?.payeeId));
+      // Only pre-check "remember" when the payee has no defaults saved yet
+      const payee = transaction?.payeeId
+        ? master.payees.find((candidate) => candidate.id === transaction.payeeId)
+        : undefined;
+      setRemember(Boolean(payee && payee.defaultCategoryId === null));
       setError('');
     }
-  }, [open, transaction]);
+  }, [open, transaction, master]);
 
   if (!open || !transaction) return null;
 
@@ -66,13 +70,19 @@ export default function QuickReviewModal({
         source: 'web'
       });
       if (remember && transaction.payeeId) {
-        await patch(`/payees/${transaction.payeeId}`, {
-          defaultCategoryId: Number(categoryId),
-          defaultPaymentMethodId: Number(methodId)
-        });
+        try {
+          await patch(`/payees/${transaction.payeeId}`, {
+            defaultCategoryId: Number(categoryId),
+            defaultPaymentMethodId: Number(methodId)
+          });
+        } catch {
+          toast.warning('Review completed, but the payee rule was not saved');
+        }
       }
       toast.success('Payment review completed');
-      await queryClient.invalidateQueries();
+      for (const key of ['ledger-transactions', 'transactions', 'master-data', 'master-data-all', 'dashboard', 'activity-events', 'payee-transactions']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
       onSaved();
       onClose();
     } catch (caught) {

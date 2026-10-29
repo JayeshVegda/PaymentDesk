@@ -122,7 +122,9 @@ export const TransactionDrawer: React.FC<TransactionDrawerProps> = ({ transactio
     setErrorMsg(null);
     try {
       await patch(`/transactions/${transaction.id}`, savePayload);
-      await queryClient.invalidateQueries();
+      for (const key of ['ledger-transactions', 'transactions', 'master-data', 'dashboard', 'activity-events', 'payee-transactions']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
       toast.success('Transaction details updated');
       setIsEditing(false);
       onClose();

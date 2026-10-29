@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,10 +6,13 @@ import {
   formatInr,
   formatTime12,
   queryString,
+  ApiError,
   LedgerTransaction,
   MasterData,
   TransactionPage,
-  patch
+  patch,
+  Category,
+  PaymentMethod
 } from '../api/client';
 import { Search, CheckCircle2, ChevronLeft, ChevronRight, Inbox, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +28,186 @@ type Draft = {
   remember: boolean;
 };
 
+const EMPTY_DRAFT: Draft = { categoryId: '', methodId: '', remember: false };
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+const isConflictError = (error: unknown): boolean =>
+  error instanceof ApiError && error.code === 'TRANSACTION_CONFLICT';
+
+function Pager({
+  page,
+  totalPages,
+  total,
+  onPage
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  onPage: (next: number) => void;
+}) {
+  return (
+    <div className="p-4 border-t border-[#DDE3EC] bg-[#F6F8FC] flex items-center justify-between text-xs text-[#667085]">
+      <span>
+        Page <strong className="text-[#111827]">{page}</strong> of{' '}
+        <strong className="text-[#111827]">{totalPages}</strong> ({total} items)
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="btn btn-secondary h-8 px-3 text-xs"
+        >
+          <ChevronLeft size={14} />
+          <span>Previous</span>
+        </button>
+        <button
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="btn btn-secondary h-8 px-3 text-xs"
+        >
+          <span>Next</span>
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ReviewRowProps {
+  item: LedgerTransaction;
+  draft: Draft;
+  resolving: boolean;
+  disabled: boolean;
+  categories: Category[];
+  methods: PaymentMethod[];
+  onDraftChange: (txId: number, field: keyof Draft, value: string | boolean) => void;
+  onResolve: (item: LedgerTransaction) => void;
+}
+
+const ReviewRow = React.memo(function ReviewRow({
+  item,
+  draft,
+  resolving,
+  disabled,
+  categories,
+  methods,
+  onDraftChange,
+  onResolve
+}: ReviewRowProps) {
+  const isAged = useMemo(() => {
+    const txTime = new Date(`${item.transactionDate}T00:00:00`).getTime();
+    return (Date.now() - txTime) / (1000 * 3600 * 24) > 7;
+  }, [item.transactionDate]);
+  const isValid = Boolean(draft.categoryId && draft.methodId);
+
+  return (
+    <div
+      className={`bg-white px-4 py-3 transition-colors hover:bg-slate-50 ${isAged ? 'border-l-2 border-l-[#F79009]' : ''}`}
+    >
+      <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(240px,1fr)_130px_minmax(390px,auto)]">
+        {/* Left: Transaction Info */}
+        <div className="flex min-w-0 items-center gap-3">
+          <PayeeAvatar name={item.payeeName} size={32} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-semibold text-[#111827]">{item.payeeName}</span>
+              {isAged && <span className="text-[11px] font-medium text-amber-700">· over 7 days</span>}
+            </div>
+
+            <div className="mt-0.5 text-xs text-[#667085]">
+              {item.transactionDate} · {formatTime12(item.transactionTime)} ·{' '}
+              {item.source.charAt(0).toUpperCase() + item.source.slice(1)}
+            </div>
+
+            <div className="mt-1 text-[11px] font-semibold text-amber-700">
+              {!item.categoryId && !item.paymentMethodId
+                ? 'Missing category and payment method'
+                : !item.categoryId
+                  ? 'Missing category'
+                  : !item.paymentMethodId
+                    ? 'Missing payment method'
+                    : 'Manual verification requested'}
+            </div>
+
+            {item.note && <p className="mt-0.5 truncate text-xs text-slate-600">{item.note}</p>}
+          </div>
+        </div>
+
+        {/* Middle: Right-Aligned Amount */}
+        <div className="text-left lg:text-right col-span-1">
+          <span className="text-base font-bold tabular-nums text-[#111827]">{formatInr(item.amountPaise)}</span>
+        </div>
+
+        {/* Right: Selectors & Resolve Action */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="w-full sm:w-40">
+            <select
+              value={draft.categoryId}
+              onChange={(e) => onDraftChange(item.id, 'categoryId', e.target.value)}
+              aria-label={`Category for ${item.payeeName}`}
+              className={`form-input text-xs font-medium h-9 ${!draft.categoryId ? 'border-amber-400 bg-amber-50/50' : ''}`}
+            >
+              <option value="">Category…</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id.toString()}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="w-full sm:w-32">
+            <select
+              value={draft.methodId}
+              onChange={(e) => onDraftChange(item.id, 'methodId', e.target.value)}
+              aria-label={`Payment method for ${item.payeeName}`}
+              className="form-input text-xs font-medium h-9"
+            >
+              {methods.map((method) => (
+                <option key={method.id} value={method.id.toString()}>
+                  {method.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 self-center">
+            <input
+              type="checkbox"
+              id={`remember-${item.id}`}
+              checked={draft.remember}
+              onChange={(e) => onDraftChange(item.id, 'remember', e.target.checked)}
+              className="w-4 h-4 rounded border-[#DDE3EC] text-[#165DFF]"
+            />
+            <label
+              htmlFor={`remember-${item.id}`}
+              className="text-xs font-semibold text-[#667085] whitespace-nowrap cursor-pointer"
+            >
+              Remember rule
+            </label>
+          </div>
+
+          <button
+            onClick={() => onResolve(item)}
+            disabled={!isValid || resolving || disabled}
+            className="btn btn-primary h-9 px-4 text-xs shrink-0 cursor-pointer self-center"
+          >
+            {resolving ? 'Resolving…' : 'Resolve'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 export default function LedgerPage() {
   const { transactionId } = useParams();
   const navigate = useNavigate();
@@ -36,7 +219,8 @@ export default function LedgerPage() {
   // Filter States
   const [savedView, setSavedView] = useState<string>('today');
   const [date, setDate] = useState(today);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebouncedValue(searchInput, 250);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [includeVoided, setIncludeVoided] = useState(false);
   const [page, setPage] = useState(1);
@@ -64,12 +248,18 @@ export default function LedgerPage() {
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [resolvingIds, setResolvingIds] = useState<Record<number, boolean>>({});
   const [bulkProcessing, setBulkProcessing] = useState(false);
+  const dirtyIds = useRef<Set<number>>(new Set());
 
-  // Sync savedView with location path (support G R and Alt+3)
+  // Sync savedView with location path (support G R / G E chords and nav clicks)
   useEffect(() => {
     if (location.pathname === '/review') {
       setSavedView('review');
       setReviewOnly(true);
+      setIncludeVoided(false);
+      setPage(1);
+    } else if (location.pathname === '/ledger') {
+      setSavedView('today');
+      setReviewOnly(false);
       setIncludeVoided(false);
       setPage(1);
     }
@@ -81,138 +271,183 @@ export default function LedgerPage() {
     queryFn: () => api<MasterData>('/master-data')
   });
 
+  const monthStart = `${today.slice(0, 8)}01`;
+  const dateApplies = savedView !== 'month' && savedView !== 'all';
+  const from = savedView === 'month' ? monthStart : undefined;
+
   const { data: result, isError: transactionsError, refetch: refetchTransactions } = useQuery<TransactionPage>({
-    queryKey: ['ledger-transactions', date, search, reviewOnly, includeVoided, page, savedView],
+    queryKey: [
+      'ledger-transactions',
+      savedView,
+      dateApplies ? date : null,
+      from ?? null,
+      search,
+      reviewOnly,
+      includeVoided,
+      page
+    ],
     queryFn: () =>
       api<TransactionPage>(
         `/transactions${queryString({
-          date: savedView === 'month' || savedView === 'all' ? undefined : date,
-          from: savedView === 'month' ? `${today.slice(0, 8)}01` : undefined,
-          search,
+          date: dateApplies ? date : undefined,
+          from,
+          search: search || undefined,
           reviewOnly,
           includeVoided,
           page,
           pageSize: 50
         })}`
       ),
+    placeholderData: (previous) => previous,
     // Poll every 30s while the tab is visible; paused in background tabs
     refetchInterval: 30000,
     refetchIntervalInBackground: false
   });
 
-  const items = result?.items || [];
-  const totalPages = Math.max(1, Math.ceil((result?.total || 0) / (result?.pageSize || 50)));
+  const items = useMemo(() => result?.items || [], [result]);
+  const total = result?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / (result?.pageSize || 50)));
   const hasError = masterError || transactionsError;
 
-  // Initialize draft values when items or master changes (specifically for items needing review)
+  // Keep the drawer's transaction fresh when the list refetches
   useEffect(() => {
-    if (savedView === 'review' && items.length > 0 && master) {
-      const defaultCashId = master.paymentMethods.find((m) => m.code === 'cash')?.id.toString() || '';
-      const initialDrafts = Object.fromEntries(
-        items.map((item) => [
-          item.id,
-          {
-            categoryId: item.categoryId?.toString() || '',
-            methodId: item.paymentMethodId?.toString() || defaultCashId,
-            remember: false
-          }
-        ])
-      );
-      setDrafts((prev) => ({ ...initialDrafts, ...prev }));
-    }
+    if (!selectedTx) return;
+    const fresh = items.find((item) => item.id === selectedTx.id);
+    if (fresh && fresh.updatedAt !== selectedTx.updatedAt) setSelectedTx(fresh);
+  }, [items, selectedTx]);
+
+  // Self-correct out-of-range pages after items shrink (bulk resolve, deletes)
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  // Seed drafts with fresh server values; keep only fields the user touched.
+  // Also prunes drafts of items that left the queue.
+  useEffect(() => {
+    if (savedView !== 'review' || !master) return;
+    const defaultCashId = master.paymentMethods.find((m) => m.code === 'cash')?.id.toString() || '';
+    setDrafts((prev) => {
+      const next: Record<number, Draft> = {};
+      for (const item of items) {
+        const kept = dirtyIds.current.has(item.id) ? prev[item.id] : undefined;
+        next[item.id] = kept ?? {
+          categoryId: item.categoryId?.toString() || '',
+          methodId: item.paymentMethodId?.toString() || defaultCashId,
+          remember: false
+        };
+      }
+      return next;
+    });
   }, [items, master, savedView]);
 
-  const handleDraftChange = <K extends keyof Draft>(txId: number, field: K, value: Draft[K]) => {
-    setDrafts((prev) => ({
-      ...prev,
-      [txId]: {
-        ...prev[txId] || { categoryId: '', methodId: '', remember: false },
-        [field]: value
-      }
-    }));
-  };
+  const handleDraftChange = useCallback(
+    (txId: number, field: keyof Draft, value: string | boolean) => {
+      dirtyIds.current.add(txId);
+      setDrafts((prev) => ({
+        ...prev,
+        [txId]: {
+          ...(prev[txId] ?? EMPTY_DRAFT),
+          [field]: value
+        }
+      }));
+    },
+    []
+  );
 
-  const handleResolve = async (item: LedgerTransaction) => {
-    const draft = drafts[item.id];
-    if (!draft || !draft.categoryId || !draft.methodId) return;
+  const invalidateLedgerData = useCallback(() => {
+    for (const key of [
+      'ledger-transactions',
+      'transactions',
+      'master-data',
+      'master-data-all',
+      'dashboard',
+      'activity-events',
+      'payee-transactions'
+    ]) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [queryClient]);
 
-    setResolvingIds((prev) => ({ ...prev, [item.id]: true }));
-    try {
-      await patch(`/transactions/${item.id}`, {
-        categoryId: Number(draft.categoryId),
-        paymentMethodId: Number(draft.methodId),
-        needsReview: false,
-        expectedUpdatedAt: item.updatedAt,
-        source: 'web'
-      });
-
-      if (draft.remember) {
+  const resolveOne = useCallback(async (item: LedgerTransaction, draft: Draft): Promise<void> => {
+    await patch(`/transactions/${item.id}`, {
+      categoryId: Number(draft.categoryId),
+      paymentMethodId: Number(draft.methodId),
+      needsReview: false,
+      expectedUpdatedAt: item.updatedAt,
+      source: 'web'
+    });
+    if (draft.remember) {
+      try {
         await patch(`/payees/${item.payeeId}`, {
           defaultCategoryId: Number(draft.categoryId),
           defaultPaymentMethodId: Number(draft.methodId)
         });
+      } catch {
+        toast.warning(`Resolved ${item.payeeName}, but the payee rule was not saved`);
       }
-
-      toast.success(`Resolved payment for ${item.payeeName}`);
-      await queryClient.invalidateQueries();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to resolve transaction');
-    } finally {
-      setResolvingIds((prev) => ({ ...prev, [item.id]: false }));
     }
-  };
+  }, []);
 
-  const handleBulkResolve = async () => {
-    const readyItems = items.filter((item) => drafts[item.id]?.categoryId && drafts[item.id]?.methodId);
+  const handleResolve = useCallback(
+    async (item: LedgerTransaction) => {
+      const draft = drafts[item.id];
+      if (!draft || !draft.categoryId || !draft.methodId) return;
+
+      setResolvingIds((prev) => ({ ...prev, [item.id]: true }));
+      try {
+        await resolveOne(item, draft);
+        toast.success(`Resolved payment for ${item.payeeName}`);
+        invalidateLedgerData();
+      } catch (error) {
+        if (isConflictError(error)) {
+          toast.info('Row changed while you were working — refreshed, try again');
+          invalidateLedgerData();
+        } else {
+          toast.error(error instanceof Error ? error.message : 'Failed to resolve transaction');
+        }
+      } finally {
+        setResolvingIds((prev) => ({ ...prev, [item.id]: false }));
+      }
+    },
+    [drafts, resolveOne, invalidateLedgerData]
+  );
+
+  const readyItems = useMemo(
+    () => items.filter((item) => drafts[item.id]?.categoryId && drafts[item.id]?.methodId),
+    [items, drafts]
+  );
+
+  const handleBulkResolve = useCallback(async () => {
     if (readyItems.length === 0) {
       toast.error('No items have a category selected yet');
       return;
     }
 
     setBulkProcessing(true);
-    let resolvedCount = 0;
-    let failedCount = 0;
-    for (const item of readyItems) {
-      try {
-        const draft = drafts[item.id]!;
-        await patch(`/transactions/${item.id}`, {
-          categoryId: Number(draft.categoryId),
-          paymentMethodId: Number(draft.methodId),
-          needsReview: false,
-          expectedUpdatedAt: item.updatedAt,
-          source: 'web'
-        });
-        if (draft.remember) {
-          await patch(`/payees/${item.payeeId}`, {
-            defaultCategoryId: Number(draft.categoryId),
-            defaultPaymentMethodId: Number(draft.methodId)
-          });
-        }
-        resolvedCount++;
-      } catch {
-        failedCount++;
-      }
-    }
     try {
-      await queryClient.invalidateQueries();
-      if (failedCount === 0) {
-        toast.success(`Resolved ${resolvedCount} payments`);
-      } else {
-        toast.warning(`Resolved ${resolvedCount}; ${failedCount} need another attempt`);
+      const results = await Promise.allSettled(
+        readyItems.map((item) => resolveOne(item, drafts[item.id] ?? EMPTY_DRAFT))
+      );
+      const rejected = results.filter((entry) => entry.status === 'rejected') as PromiseRejectedResult[];
+      const conflicts = rejected.filter((entry) => isConflictError(entry.reason));
+      const resolvedCount = results.length - rejected.length;
+
+      if (conflicts.length > 0) {
+        toast.info(`${conflicts.length} row${conflicts.length > 1 ? 's' : ''} changed while working — refreshed, try those again`);
       }
-    } catch {
-      toast.warning(`Resolved ${resolvedCount}; refresh the page to update the queue`);
+      if (rejected.length === 0) {
+        toast.success(`Resolved ${resolvedCount} payments`);
+      } else if (conflicts.length < rejected.length) {
+        const firstError = rejected.find((entry) => !isConflictError(entry.reason))?.reason;
+        toast.warning(
+          `Resolved ${resolvedCount}; ${rejected.length - conflicts.length} failed${firstError instanceof Error ? ` (${firstError.message})` : ''}`
+        );
+      }
+      invalidateLedgerData();
     } finally {
       setBulkProcessing(false);
     }
-  };
-
-  const isOlderThan7Days = (dateStr: string) => {
-    const txDate = new Date(dateStr);
-    const now = new Date();
-    const diffDays = (now.getTime() - txDate.getTime()) / (1000 * 3600 * 24);
-    return diffDays > 7;
-  };
+  }, [readyItems, drafts, resolveOne, invalidateLedgerData]);
 
   const rememberedCount = useMemo(() => {
     return master?.payees.filter((p) => p.defaultCategoryId !== null).length || 0;
@@ -243,12 +478,14 @@ export default function LedgerPage() {
     { id: 'review', label: 'Review Queue' },
     { id: 'month', label: 'This Month' },
     { id: 'all', label: 'All Transactions' },
-    { id: 'voided', label: 'With Voided' },
+    { id: 'voided', label: 'With Voided' }
   ];
+
+  const isReview = savedView === 'review';
 
   return (
     <div className="space-y-6">
-      <h1 className="sr-only">{savedView === 'review' ? 'Review Inbox' : 'Payment Ledger'}</h1>
+      <h1 className="sr-only">{isReview ? 'Review Inbox' : 'Payment Ledger'}</h1>
       {hasError && (
         <div className="flex items-center gap-3 rounded-lg bg-red-50 p-4 text-sm text-red-800 border border-red-200">
           <span className="font-semibold">Connection Error:</span>
@@ -259,14 +496,10 @@ export default function LedgerPage() {
 
       {/* Segmented Control Tabs (Section 4.2 Spec) */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <SegmentedTabs
-          options={tabs}
-          activeId={savedView}
-          onChange={handleViewChange}
-        />
+        <SegmentedTabs options={tabs} activeId={savedView} onChange={handleViewChange} />
       </div>
 
-      {savedView === 'review' && (
+      {isReview && (
         <div className="flex items-center justify-between gap-3 bg-white p-4 border border-[#DDE3EC] rounded-2xl shadow-xs">
           <div className="flex items-center gap-2">
             {rememberedCount > 0 && (
@@ -279,18 +512,20 @@ export default function LedgerPage() {
           {items.length > 0 && (
             <button
               onClick={handleBulkResolve}
-              disabled={bulkProcessing}
+              disabled={bulkProcessing || readyItems.length === 0}
               className="btn btn-primary h-10 px-4 gap-2 bg-[#F79009] hover:bg-[#D97706] border-none shadow-xs text-white"
             >
               <CheckCircle2 size={16} />
-              <span>{bulkProcessing ? 'Processing...' : 'Resolve all ready items'}</span>
+              <span>
+                {bulkProcessing ? 'Processing...' : `Resolve all ready items${readyItems.length ? ` (${readyItems.length})` : ''}`}
+              </span>
             </button>
           )}
         </div>
       )}
 
       {/* Combined Filter Bar (44px height inputs) */}
-      {savedView !== 'review' && (
+      {!isReview && (
         <div className="ledger-card p-4 bg-white border border-[#DDE3EC] rounded-2xl shadow-xs flex flex-col md:flex-row items-center gap-3">
           {/* Search Input */}
           <div className="relative flex-1 w-full">
@@ -300,9 +535,9 @@ export default function LedgerPage() {
               name="ledger-search"
               aria-label="Search ledger"
               autoComplete="off"
-              value={search}
+              value={searchInput}
               onChange={(e) => {
-                setSearch(e.target.value);
+                setSearchInput(e.target.value);
                 setPage(1);
               }}
               placeholder="Search payee, category, amount, or note…"
@@ -311,7 +546,7 @@ export default function LedgerPage() {
           </div>
 
           {/* Date Selector */}
-          {savedView !== 'month' && savedView !== 'all' && (
+          {dateApplies && (
             <div className="w-full md:w-48">
               <input
                 type="date"
@@ -329,133 +564,35 @@ export default function LedgerPage() {
         </div>
       )}
 
-      {savedView === 'review' ? (
-        <div className="overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white shadow-[var(--shadow-card)] divide-y divide-[#DDE3EC]">
-          {items.length === 0 ? (
-            <div className="p-12 text-center text-[#667085]">
-              <Inbox size={40} className="mx-auto mb-3 text-emerald-500" />
-              <h3 className="text-lg font-bold text-[#111827]">Review inbox is empty</h3>
-              <p className="text-xs mt-1 text-[#667085]">
-                All incoming payments have been categorized and confirmed. Great work!
-              </p>
-            </div>
-          ) : (
-            items.map((item) => {
-              const draft = drafts[item.id] || { categoryId: '', methodId: '', remember: false };
-              const isValid = Boolean(draft.categoryId && draft.methodId);
-              const isResolving = Boolean(resolvingIds[item.id]);
-              const isAged = isOlderThan7Days(item.transactionDate);
-
-              return (
-                <div
+      {isReview ? (
+        <div className="overflow-hidden rounded-2xl border border-[#DDE3EC] bg-white shadow-[var(--shadow-card)]">
+          <div className="divide-y divide-[#DDE3EC]">
+            {items.length === 0 ? (
+              <div className="p-12 text-center text-[#667085]">
+                <Inbox size={40} className="mx-auto mb-3 text-emerald-500" />
+                <h3 className="text-lg font-bold text-[#111827]">Review inbox is empty</h3>
+                <p className="text-xs mt-1 text-[#667085]">
+                  All incoming payments have been categorized and confirmed. Great work!
+                </p>
+              </div>
+            ) : (
+              items.map((item) => (
+                <ReviewRow
                   key={item.id}
-                  className={`bg-white px-4 py-3 transition-colors hover:bg-slate-50 ${isAged ? 'border-l-2 border-l-[#F79009]' : ''}`}
-                >
-                  <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[minmax(240px,1fr)_130px_minmax(390px,auto)]">
-                    {/* Left: Transaction Info */}
-                    <div className="flex min-w-0 items-center gap-3">
-                      <PayeeAvatar name={item.payeeName} size={32} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-semibold text-[#111827]">{item.payeeName}</span>
-                          {isAged && (
-                            <span className="text-[11px] font-medium text-amber-700">· over 7 days</span>
-                          )}
-                        </div>
-
-                        <div className="mt-0.5 text-xs text-[#667085]">
-                          {item.transactionDate} · {formatTime12(item.transactionTime)} · {item.source.charAt(0).toUpperCase() + item.source.slice(1)}
-                        </div>
-
-                        <div className="mt-1 text-[11px] font-semibold text-amber-700">
-                          {!item.categoryId && !item.paymentMethodId
-                            ? 'Missing category and payment method'
-                            : !item.categoryId
-                              ? 'Missing category'
-                              : !item.paymentMethodId
-                                ? 'Missing payment method'
-                                : 'Manual verification requested'}
-                        </div>
-
-                        {item.note && (
-                          <p className="mt-0.5 truncate text-xs text-slate-600">
-                            {item.note}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Middle: Right-Aligned Amount */}
-                    <div className="text-left lg:text-right col-span-1">
-                      <span className="text-base font-bold tabular-nums text-[#111827]">
-                        {formatInr(item.amountPaise)}
-                      </span>
-                    </div>
-
-                    {/* Right: Selectors & Resolve Action */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      {/* Category Selector */}
-                      <div className="w-full sm:w-40">
-                        <select
-                          value={draft.categoryId}
-                          onChange={(e) => handleDraftChange(item.id, 'categoryId', e.target.value)}
-                          aria-label={`Category for ${item.payeeName}`}
-                          className={`form-input text-xs font-medium h-9 ${
-                            !draft.categoryId ? 'border-amber-400 bg-amber-50/50' : ''
-                          }`}
-                        >
-                          <option value="">Category…</option>
-                          {master?.categories.map((c) => (
-                            <option key={c.id} value={c.id.toString()}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Method Selector */}
-                      <div className="w-full sm:w-32">
-                        <select
-                          value={draft.methodId}
-                          onChange={(e) => handleDraftChange(item.id, 'methodId', e.target.value)}
-                          aria-label={`Payment method for ${item.payeeName}`}
-                          className="form-input text-xs font-medium h-9"
-                        >
-                          {master?.paymentMethods.map((m) => (
-                            <option key={m.id} value={m.id.toString()}>
-                              {m.displayName}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Promoted Remember Mapping */}
-                      <div className="flex items-center gap-1.5 self-center">
-                        <input
-                          type="checkbox"
-                          id={`remember-${item.id}`}
-                          checked={draft.remember}
-                          onChange={(e) => handleDraftChange(item.id, 'remember', e.target.checked)}
-                          className="w-4 h-4 rounded border-[#DDE3EC] text-[#165DFF]"
-                        />
-                        <label htmlFor={`remember-${item.id}`} className="text-xs font-semibold text-[#667085] whitespace-nowrap cursor-pointer">
-                          Remember rule
-                        </label>
-                      </div>
-
-                      {/* Resolve CTA */}
-                      <button
-                        onClick={() => handleResolve(item)}
-                        disabled={!isValid || isResolving}
-                        className="btn btn-primary h-9 px-4 text-xs shrink-0 cursor-pointer self-center"
-                      >
-                        {isResolving ? 'Resolving…' : 'Resolve'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+                  item={item}
+                  draft={drafts[item.id] ?? EMPTY_DRAFT}
+                  resolving={Boolean(resolvingIds[item.id])}
+                  disabled={bulkProcessing}
+                  categories={master?.categories ?? []}
+                  methods={master?.paymentMethods ?? []}
+                  onDraftChange={handleDraftChange}
+                  onResolve={handleResolve}
+                />
+              ))
+            )}
+          </div>
+          {items.length > 0 && (
+            <Pager page={page} totalPages={totalPages} total={total} onPage={setPage} />
           )}
         </div>
       ) : (
@@ -478,7 +615,9 @@ export default function LedgerPage() {
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-[#667085]">
                       <Inbox size={32} className="mx-auto mb-2 opacity-50" />
-                      <p className="font-semibold text-base">No transactions match your search</p>
+                      <p className="font-semibold text-base">
+                        {search ? 'No transactions match your search' : 'No transactions yet'}
+                      </p>
                       <p className="text-xs mt-1">Try adjusting your filters or date selection.</p>
                     </td>
                   </tr>
@@ -563,38 +702,12 @@ export default function LedgerPage() {
           </div>
 
           {/* Pagination Controls */}
-          <div className="p-4 border-t border-[#DDE3EC] bg-[#F6F8FC] flex items-center justify-between text-xs text-[#667085]">
-            <span>
-              Page <strong className="text-[#111827]">{page}</strong> of <strong className="text-[#111827]">{totalPages}</strong> ({result?.total || 0} items)
-            </span>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="btn btn-secondary h-8 px-3 text-xs"
-              >
-                <ChevronLeft size={14} />
-                <span>Previous</span>
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="btn btn-secondary h-8 px-3 text-xs"
-              >
-                <span>Next</span>
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
+          <Pager page={page} totalPages={totalPages} total={total} onPage={setPage} />
         </div>
       )}
 
       {/* Transaction Detail Drawer */}
-      <TransactionDrawer
-        transaction={selectedTx}
-        onClose={() => setSelectedTx(null)}
-      />
+      <TransactionDrawer transaction={selectedTx} onClose={() => setSelectedTx(null)} />
     </div>
   );
 }

@@ -100,6 +100,10 @@ export function createApi(runtime: DatabaseRuntime): Hono {
       })
     );
   });
+  api.post('/payees/merge', async (context) => {
+    const body = await context.req.json<{ sourceId?: number; targetId?: number }>();
+    return context.json(ledger.mergePayees(Number(body.sourceId), Number(body.targetId)));
+  });
   api.post('/payees/:id/restore', async (context) => {
     const updated = ledger.updatePayee(id(context.req.param('id')), { active: true });
     return context.json(updated);

@@ -237,13 +237,23 @@ export default function TodayPage() {
 
       const saved = res.transaction;
       toast.success(`${formatInr(saved.amountPaise)} paid to ${saved.payeeName}`, {
-        description: `${saved.categoryName || 'Uncategorised'} · ${saved.paymentMethodName || 'Cash'} · ${formatTime12(saved.transactionTime)}`
+        description: `${saved.categoryName || 'Uncategorised'} · ${saved.paymentMethodName || 'Cash'} · ${formatTime12(saved.transactionTime)}`,
+        ...(saved.needsReview
+          ? {
+              action: {
+                label: 'Review now',
+                onClick: () => navigate('/review')
+              }
+            }
+          : {})
       });
       setCommand('');
       setPreview(null);
       setPreviewCommand('');
       setShowSuggestions(false);
-      await queryClient.invalidateQueries();
+      for (const key of ['ledger-transactions', 'transactions', 'master-data', 'master-data-all', 'dashboard', 'activity-events', 'payee-transactions']) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
 
       setTimeout(() => inputRef.current?.focus(), 50);
     } catch (error) {

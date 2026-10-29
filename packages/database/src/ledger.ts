@@ -1000,6 +1000,129 @@ export class LedgerService {
     return this.transactions.unvoid(id, 'web');
   }
 
+  mergePayees(sourceId: number, targetId: number) {
+    if (!Number.isInteger(sourceId) || !Number.isInteger(targetId)) {
+      throw new TypeError('Both source and target payee ids are required');
+    }
+    if (sourceId === targetId) {
+      throw new TypeError('Cannot merge a payee into itself');
+    }
+
+    interface PayeeRecord {
+      id: number;
+      type: 'person' | 'company';
+      name: string;
+      default_category_id: number | null;
+      default_payment_method_id: number | null;
+      active: number;
+      favourite: number;
+      notes: string | null;
+      created_at: string;
+      updated_at: string;
+    }
+    const fetchPayee = (payeeId: number): PayeeRecord | undefined =>
+      this.sqlite.prepare('SELECT * FROM payees WHERE id = ?').get(payeeId) as
+        | PayeeRecord
+        | undefined;
+
+    const moveStatement = this.sqlite.prepare(
+      'UPDATE transactions SET payee_id = ?, updated_at = ?, version = version + 1 WHERE id = ?'
+    );
+    const auditStatement = this.sqlite.prepare(
+      `INSERT INTO transaction_audit (transaction_id, action, previous_data, new_data, change_source)
+       VALUES (?, 'corrected', ?, ?, 'web')`
+    );
+
+    return this.sqlite.transaction(() => {
+      const source = fetchPayee(sourceId);
+      const target = fetchPayee(targetId);
+      if (!source) throw new TransactionNotFoundError(`Payee ${sourceId} was not found`);
+      if (!target) throw new TransactionNotFoundError(`Payee ${targetId} was not found`);
+
+      const rows = this.sqlite
+        .prepare('SELECT * FROM transactions WHERE payee_id = ? ORDER BY id')
+        .all(sourceId) as Array<{
+        id: number;
+        transaction_date: string;
+        transaction_time: string;
+        payee_id: number;
+        amount_paise: number;
+        category_id: number | null;
+        payment_method_id: number | null;
+        note: string | null;
+        source: ChangeSource;
+        status: 'posted' | 'voided';
+        needs_review: number;
+        silent: number;
+        created_at: string;
+        updated_at: string;
+        version: number;
+      }>;
+
+      let clock = Date.now();
+      let moved = 0;
+      for (const row of rows) {
+        const before: TransactionRecord = {
+          id: row.id,
+          transactionDate: row.transaction_date,
+          transactionTime: row.transaction_time,
+          payeeId: row.payee_id,
+          amountPaise: row.amount_paise,
+          categoryId: row.category_id,
+          paymentMethodId: row.payment_method_id,
+          note: row.note,
+          source: row.source,
+          status: row.status,
+          needsReview: row.needs_review === 1,
+          silent: row.silent === 1,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          version: row.version
+        };
+        clock += 1;
+        const updatedAt = new Date(clock).toISOString();
+        const after: TransactionRecord = { ...before, payeeId: targetId, updatedAt, version: before.version + 1 };
+        moveStatement.run(targetId, updatedAt, before.id);
+        auditStatement.run(before.id, JSON.stringify(before), JSON.stringify(after));
+        moved += 1;
+      }
+
+      const sourceAliases = this.sqlite
+        .prepare('SELECT alias FROM payee_aliases WHERE payee_id = ?')
+        .all(sourceId) as Array<{ alias: string }>;
+      const combinedAliases = [
+        ...new Set([source.name, ...sourceAliases.map((row) => row.alias)].filter((alias) => alias.trim()))
+      ];
+      this.sqlite.prepare('DELETE FROM payee_aliases WHERE payee_id = ?').run(targetId);
+      const insertAlias = this.sqlite.prepare(
+        'INSERT INTO payee_aliases (payee_id, alias, normalized_alias) VALUES (?, ?, ?)'
+      );
+      for (const alias of combinedAliases) {
+        insertAlias.run(targetId, alias, normalizeLookupText(alias));
+      }
+
+      const now = new Date().toISOString();
+      this.sqlite
+        .prepare(
+          `UPDATE payees SET
+            favourite = MAX(COALESCE(favourite, 0), COALESCE(?, 0)),
+            default_category_id = COALESCE(default_category_id, ?),
+            default_payment_method_id = COALESCE(default_payment_method_id, ?),
+            active = 1,
+            updated_at = ?
+          WHERE id = ?`
+        )
+        .run(source.favourite, source.default_category_id, source.default_payment_method_id, now, targetId);
+      this.sqlite.prepare('UPDATE payees SET active = 0, updated_at = ? WHERE id = ?').run(now, sourceId);
+
+      return {
+        movedTransactions: moved,
+        source: { id: source.id, name: source.name },
+        target: { id: target.id, name: target.name }
+      };
+    })();
+  }
+
   private transactionFilter(options: ListTransactionOptions): {
     where: string;
     parameters: Array<string | number>;
@@ -1019,8 +1142,21 @@ export class LedgerService {
       parameters.push(options.to);
     }
     if (options.search) {
-      conditions.push("(p.name LIKE ? ESCAPE '\\' OR t.note LIKE ? ESCAPE '\\')");
-      parameters.push(`%${escapeLike(options.search)}%`, `%${escapeLike(options.search)}%`);
+      const like = `%${escapeLike(options.search)}%`;
+      const digits = options.search.replace(/\D/g, "");
+      const amountValue = Number(options.search.replace(/[^0-9.]/g, ""));
+      const amountConditions: string[] = ["p.name LIKE ? ESCAPE '\\'", "t.note LIKE ? ESCAPE '\\'", "c.name LIKE ? ESCAPE '\\'"];
+      const amountParameters: Array<string | number> = [like, like, like];
+      if (digits) {
+        amountConditions.push("CAST(t.amount_paise AS TEXT) LIKE ? ESCAPE '\\'");
+        amountParameters.push(`%${digits}%`);
+        if (Number.isFinite(amountValue) && amountValue > 0) {
+          amountConditions.push('t.amount_paise = ?');
+          amountParameters.push(Math.round(amountValue * 100));
+        }
+      }
+      conditions.push(`(${amountConditions.join(' OR ')})`);
+      parameters.push(...amountParameters);
     }
     if (options.methodId) {
       conditions.push('t.payment_method_id = ?');
@@ -1051,7 +1187,8 @@ export class LedgerService {
       (
         this.sqlite
           .prepare(
-            `SELECT count(*) AS count FROM transactions t JOIN payees p ON p.id = t.payee_id ${where}`
+            `SELECT count(*) AS count FROM transactions t JOIN payees p ON p.id = t.payee_id
+           LEFT JOIN categories c ON c.id = t.category_id ${where}`
           )
           .get(...parameters) as { count: number }
       ).count
