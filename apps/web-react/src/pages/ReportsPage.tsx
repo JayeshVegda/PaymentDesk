@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { api, queryString, LedgerTransaction } from '../api/client';
-import { toast } from 'sonner';
+import { api, queryString } from '../api/client';
 import { AlertCircle } from 'lucide-react';
-import { TransactionDrawer } from '../components/common/TransactionDrawer';
 
 import {
   ReportFilters,
@@ -16,7 +14,6 @@ import { CashOutflowTrend } from '../components/reports/CashOutflowTrend';
 import { OutflowTypeCard } from '../components/reports/OutflowTypeCard';
 import { CategorySpendChart } from '../components/reports/CategorySpendChart';
 import { TopPayeesCard } from '../components/reports/TopPayeesCard';
-import { TransactionsReportTable, TransactionReportRow } from '../components/reports/TransactionsReportTable';
 import { ReportSkeletons } from '../components/reports/ReportSkeletons';
 import { ReportGroup } from '../lib/report-groups';
 
@@ -147,8 +144,6 @@ export default function ReportsPage() {
     needsReview: initialNeedsReview
   });
 
-  const [selectedTx, setSelectedTx] = useState<LedgerTransaction | null>(null);
-
   // Update URL search parameters when filters change
   useEffect(() => {
     const params: Record<string, string> = {};
@@ -193,22 +188,6 @@ export default function ReportsPage() {
     staleTime: 30000
   });
 
-  // Fetch Transactions List matching current filters
-  const transactionsQueryString = queryString({
-    from: filters.from,
-    to: filters.to,
-    ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
-    ...(filters.payeeId ? { payeeId: filters.payeeId } : {}),
-    ...(filters.needsReview ? { reviewOnly: 'true' } : {}),
-    pageSize: 100
-  });
-
-  const { data: transactionsData, refetch: refetchTransactions } = useQuery<{ items: TransactionReportRow[] }>({
-    queryKey: ['reports-transactions', filters],
-    queryFn: () => api<{ items: TransactionReportRow[] }>(`/transactions${transactionsQueryString}`),
-    staleTime: 30000
-  });
-
   const handleFilterChange = (updated: Partial<ReportFilterState>) => {
     setFilters((prev) => {
       let newFrom = prev.from;
@@ -247,7 +226,6 @@ export default function ReportsPage() {
 
   const handleRefresh = () => {
     refetchReport();
-    refetchTransactions();
   };
 
   const activeCategory = masterData?.categories.find((c) => c.id === filters.categoryId);
@@ -322,24 +300,8 @@ export default function ReportsPage() {
               />
             </div>
           </div>
-
-          {/* Matching Transactions Table (Full Width directly below column stacks) */}
-          <TransactionsReportTable
-            transactions={transactionsData?.items || []}
-            onSelectTransaction={(tx) => {
-              api<LedgerTransaction>(`/transactions/${tx.id}`)
-                .then(setSelectedTx)
-                .catch(() => toast.error('Failed to load transaction details'));
-            }}
-          />
         </>
       ) : null}
-
-      {/* Transaction Details Sheet / Drawer */}
-      <TransactionDrawer
-        transaction={selectedTx}
-        onClose={() => setSelectedTx(null)}
-      />
     </div>
   );
 }

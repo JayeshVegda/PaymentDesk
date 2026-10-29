@@ -6,7 +6,6 @@ import TodayPage from '../pages/TodayPage';
 const LedgerPage = lazy(() => import('../pages/LedgerPage'));
 const PayeesPage = lazy(() => import('../pages/PayeesPage'));
 const PayeeDetailPage = lazy(() => import('../pages/PayeeDetailPage'));
-const ActivityPage = lazy(() => import('../pages/ActivityPage'));
 const ReportsPage = lazy(() => import('../pages/ReportsPage'));
 const SystemPage = lazy(() => import('../pages/SystemPage'));
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
@@ -69,11 +68,7 @@ export default function AppRouter() {
         />
         <Route
           path="/activity"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <ActivityPage />
-            </Suspense>
-          }
+          element={<Navigate to="/ledger" replace />}
         />
         <Route
           path="/reports"
